@@ -4,6 +4,8 @@ from random import shuffle
 import csv
 from play import Play
 
+defense_positions = {'SS', 'DE', 'ILB', 'FS', 'CB', 'DT', 'OLB', 'NT', 'MLB'}
+
 def read_csv(file_name):
 	plays = []
 	data = []
@@ -37,8 +39,17 @@ def get_plays(data):
 		nodes = []
 		edges = []
 		label = row[0][31]
+		offense = []
+		defense = []
+		num_nodes = 0
 		for i in range(len(row)):
 			node = []
+
+			if row[i][36] in defense_positions:
+				defense.append(num_nodes)
+			else:
+				offense.append(num_nodes)
+
 			if row[i][2] == "away":
 				node.append(0)
 			else:
@@ -52,7 +63,12 @@ def get_plays(data):
 			node.append(float(row[i][9])) # direction
 			node.append(float(row[i][14])) # yardline
 			node.append(float(row[i][33])) # weight
+			num_nodes += 1
 			nodes += [node]
+
+		for o in offense:
+			for d in defense:
+				edges.append([o, d])
 		label = np.array(label).astype(np.long)
 		plays += [Play(np.array(nodes, dtype=np.float32), edges, label)]
 	return plays

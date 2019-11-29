@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import preprocess
 import dgl
+import networkx as nx
 
 
 class Model(nn.Module):
@@ -84,7 +85,7 @@ class Model(nn.Module):
 
 		:param logits: a 2-D np array of size (batch_size, 2)
 		:param labels: a 1-D np array of size (batch_size) 
-									(1 for if the molecule is active against cancer, else 0).
+									(1 for if the play is active against cancer, else 0).
 		:return: mean accuracy over batch.
 		"""
 		return np.mean(np.argmax(logits, 1) == labels)
@@ -174,31 +175,29 @@ class MPLayer(nn.Module):
 		"""
 		return {'features': torch.sum(nodes.mailbox['message'], dim=1)}
 
-def build_graph(molecule):
+def build_graph(play):
 	"""
-	Constructs a DGL graph out of a molecule from the train/test data.
+	Constructs a DGL graph out of a play from the train/test data.
 
-	:param molecule: a Molecule object (see play.py for more info)
-	:return: A DGL Graph with the same number of nodes as atoms in the molecule, edges connecting them,
+	:param play: a play object (see play.py for more info)
+	:return: A DGL Graph with the same number of nodes as atoms in the play, edges connecting them,
 	         and node features applied.
 	"""
 	# TODO: Initialize a DGL Graph
 	graph = dgl.DGLGraph()
-	# TODO: Call the graph's add_nodes method with the number of nodes in the molecule.
-	graph.add_nodes(len(molecule.nodes))
-	# TODO: Turn molecule's nodes into a tensor, and set it to be the data of this graph.
-	tensor = torch.from_numpy(molecule.nodes)
+	# TODO: Call the graph's add_nodes method with the number of nodes in the play.
+	graph.add_nodes(len(play.nodes))
+	# TODO: Turn play's nodes into a tensor, and set it to be the data of this graph.
+	tensor = torch.from_numpy(play.nodes)
 	graph.ndata['features'] = tensor
-	# TODO: Construct a tuple of src and dst nodes from the list of edges in molecules.
-	#      e.g if the edges of the molecule looked like [(1,2), (3,4), (5,6)] return
+	# TODO: Construct a tuple of src and dst nodes from the list of edges in plays.
+	#      e.g if the edges of the play looked like [(1,2), (3,4), (5,6)] return
 	#      (1,3,5) and (2,4,6).
 	src = []
 	dst = []
-	for i in range(22):
-		for j in range(22):
-			if i != j:
-				src += [i]
-				dst += [j]
+	for tuple in play.edges:
+		src.append(tuple[0])
+		dst.append(tuple[1])
 	graph.add_edges(src, dst)
 	graph.add_edges(dst, src)
 	return graph
@@ -207,13 +206,13 @@ def train(model, train_data):
 	"""
 	Trains your model given the training data.
 
-	For each batch of molecules in train data...
-		1) Make dgl graphs for each of the molecules in your batch; collect them in a list.
+	For each batch of plays in train data...
+		1) Make dgl graphs for each of the plays in your batch; collect them in a list.
 		2) call dgl.batch to turn your list of graphs into a batched graph.
-		3) Turn the labels of each of the molecules in your batch into a 1-D tensor of size
+		3) Turn the labels of each of the plays in your batch into a 1-D tensor of size
 		   batch_size  
 		4) Pass this graph to the Model's forward pass. Run the resulting logits
-				and the labels of the molecule batch through nn.CrossEntropyLoss.
+				and the labels of the play batch through nn.CrossEntropyLoss.
 		3) Zero the gradient of your optimizer.
 		4) Do backprop on your loss.
 		5) Take a step with the optimizer.
@@ -222,7 +221,7 @@ def train(model, train_data):
 	a softmax layer on its own. Your model won't train well if you pass it probabilities.
 
 	:param model: Model class representing your MPNN.
-	:param train_data: A 1-D list of molecule objects, representing all the molecules
+	:param train_data: A 1-D list of play objects, representing all the plays
 	in the training set from get_data
 	:return: nothing.
 	"""
@@ -233,8 +232,11 @@ def train(model, train_data):
 		graphs = []
 		labels = []
 		for m in range(offset, offset+model.batch_size):
-			graphs += [build_graph(train_data[m])]
-			labels += [int(train_data[m].label)]
+			G = build_graph(train_data[m])
+			# print('We have %d nodes.' % graph.number_of_nodes())
+			# print('We have %d edges.' % graph.number_of_edges())
+			graphs.append(G)
+			labels.append(train_data[m].label)
 		labels_torch = torch.from_numpy(np.array(labels))
 		batch = dgl.batch(graphs)
 		logits = model(batch)
@@ -249,12 +251,12 @@ def test(model, test_data):
 	"""
 	Testing function for our model.
 
-	Batch the molecules in test_data, feed them into your model as described in train.
+	Batch the plays in test_data, feed them into your model as described in train.
 	After you have the logits: turn them back into numpy arrays, compare the accuracy to the labels,
 	and keep a running sum.
 
 	:param model: Model class representing your MPNN.
-	:param test_data: A 1-D list of molecule objects, representing all the molecules in your
+	:param test_data: A 1-D list of play objects, representing all the plays in your
 	testing set from get_data.
 	:return: total accuracy over the test set (between 0 and 1)
 	"""
@@ -279,7 +281,7 @@ def test(model, test_data):
 
 def main():
 	# TODO: Return the training and testing data from get_data
-	trainData, testData = preprocess.get_data('train.csv')
+	trainData, testData = preprocess.get_data('data/train.csv')
 	print("finished preprocess")
 	# TODO: Instantiate model
 	model = Model()
