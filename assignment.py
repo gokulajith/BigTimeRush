@@ -9,19 +9,8 @@ import networkx as nx
 
 
 class Model(nn.Module):
-	"""
-	Model class representing your MPNN. This is (almost) exactly like your Model
-	class from TF2, but it inherits from nn.Module instead of keras.Model.
-	Treat it identically to how you treated your Model class from previous
-	assignments.
-	"""
 
 	def __init__(self):
-		"""
-		Init method for Model class. Instantiate a lifting layer, an optimizer,
-		some number of MPLayers (we recommend 3), and a readout layer going from
-		the latent space of message passing to the number of classes.
-		"""
 		super(Model, self).__init__()
 
 		# Initialize hyperparameters
@@ -33,7 +22,7 @@ class Model(nn.Module):
 		self.MP1 = MPLayer(300, 300)
 		self.MP2 = MPLayer(300, 300)
 		self.MP3 = MPLayer(300, 300)
-		self.readOutLayer = nn.Linear(300, 2)
+		self.readOutLayer = nn.Linear(300, 31)
 
 		self.optimizer = torch.optim.Adam(self.parameters(), lr=0.0005)
 
@@ -69,10 +58,8 @@ class Model(nn.Module):
 		then use dgl.sum_nodes to return logits. 
 
 		:param g: The batched DGL graph
-		:param node_feats: The features at each node in the graph. Tensor of shape
-			                   (num_atoms_in_batched_graph,
-			                    size_of_node_vectors_from_prev_message_passing)
-		:return: logits tensor of size (batch_size, 2)
+		:param node_feats: The features at each node in the graph.
+		:return: logits tensor of size (batch_size, 31)
 		"""
 		node_feats = self.readOutLayer(node_feats)
 		g.ndata['features'] = node_feats
@@ -88,7 +75,11 @@ class Model(nn.Module):
 									(1 for if the play is active against cancer, else 0).
 		:return: mean accuracy over batch.
 		"""
-		return np.mean(np.argmax(logits, 1) == labels)
+		newlabels = label_converter(labels)
+		for i in range(len(logits)):
+			print("guess:", np.argmax(i))
+			print("correct:", newlabels[i])
+		return 0
 
 class MPLayer(nn.Module):
 	"""
@@ -226,25 +217,22 @@ def train(model, train_data):
 	:return: nothing.
 	"""
 
-	loss = nn.CrossEntropyLoss()
 	for i in range(int(len(train_data) / model.batch_size)):
 		offset = i * model.batch_size
 		graphs = []
 		labels = []
 		for m in range(offset, offset+model.batch_size):
 			G = build_graph(train_data[m])
-			# print('We have %d nodes.' % graph.number_of_nodes())
-			# print('We have %d edges.' % graph.number_of_edges())
 			graphs.append(G)
 			labels.append(train_data[m].label)
-		labels_torch = torch.from_numpy(np.array(labels))
+
+		labels_torch = torch.from_numpy(np.array(label_converter(labels)))
 		batch = dgl.batch(graphs)
-		logits = model(batch)
-		l = loss(logits, labels_torch)
+		logits = F.log_softmax(model(batch), 1)
+		l = F.nll_loss(logits, labels_torch)
 		model.optimizer.zero_grad()
 		l.backward()
 		model.optimizer.step()
-
 
 
 def test(model, test_data):
@@ -272,12 +260,23 @@ def test(model, test_data):
 			labels += [int(test_data[m].label)]
 		labels = np.array(labels)
 		batch = dgl.batch(graphs)
-		logits = model(batch)
+		logits = F.log_softmax(model(batch))
 		logits = logits.detach().numpy()
 		acc = model.accuracy_function(logits, labels)
 		tot_acc += acc
 	return tot_acc/num_batches
 
+def label_converter(labels):
+	newLabels = []
+	for i in labels:
+		label = i
+		if label < -15:
+			label = -15
+		if label > 15:
+			label = 15
+		label += 15
+		newLabels += [label]
+	return newLabels
 
 def main():
 	# TODO: Return the training and testing data from get_data
