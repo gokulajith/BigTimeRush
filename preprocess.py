@@ -18,8 +18,6 @@ def read_csv(file_name):
 			else:
 				line_count += 1
 				data += [row]
-				if line_count == 2201:
-					break
 
 	play_count = 0
 	cur_play = []
@@ -35,6 +33,7 @@ def read_csv(file_name):
 
 def get_plays(data):
 	plays = []
+	ball_carriers = []
 	for row in data:
 		nodes = []
 		edges = []
@@ -44,6 +43,9 @@ def get_plays(data):
 		num_nodes = 0
 		for i in range(len(row)):
 			node = []
+
+			if row[i][10] == row[i][23]:
+				ball_carriers.append(i)
 
 			if row[i][36] in defense_positions:
 				defense.append(num_nodes)
@@ -59,8 +61,14 @@ def get_plays(data):
 			node.append(float(row[i][5])) # speed (yards per second)
 			node.append(float(row[i][6])) # acceleration (yards per second^2)
 			node.append(float(row[i][7])) # distance traveled since snap
-			node.append(float(row[i][8])) # orientation
-			node.append(float(row[i][9])) # direction
+			try :
+				node.append(float(row[i][8])) # orientation
+			except ValueError:
+				node.append(0)
+			try:
+				node.append(float(row[i][9])) # direction
+			except ValueError:
+				node.append(0)
 			node.append(float(row[i][14])) # yardline
 			node.append(float(row[i][33])) # weight
 			num_nodes += 1
@@ -71,16 +79,20 @@ def get_plays(data):
 				edges.append([o, d])
 		label = np.array(label).astype(np.long)
 		plays += [Play(np.array(nodes, dtype=np.float32), edges, label)]
-	return plays
+
+	print(ball_carriers)
+	return plays, np.array(ball_carriers)
 
 def get_data(file_name):
 	"""
 	"""
 	np.set_printoptions(threshold=sys.maxsize)
 	test_fraction = 0.1
-	plays = get_plays(read_csv(file_name))
-	np.random.shuffle(plays)
+	plays, ball_carriers = get_plays(read_csv(file_name))
+	# np.random.shuffle(plays)
 	test_length = int(np.floor(len(plays) * test_fraction))
 	test = plays[:test_length]
 	train = plays[test_length:]
-	return train, test
+	test_ball_carriers = ball_carriers[:test_length]
+	train_ball_carriers = ball_carriers[test_length:]
+	return train, test, train_ball_carriers, test_ball_carriers
