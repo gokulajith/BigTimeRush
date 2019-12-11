@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 from matplotlib import pyplot as plt
 from preprocess import get_convolution_data
-
+from tensorflow.keras.callbacks import TensorBoard
+import time
 import os
 import tensorflow as tf
 import numpy as np
@@ -18,13 +19,15 @@ class Model(tf.keras.Model):
         """
         super(Model, self).__init__()
         self.epsilon = 0.001
+        self.LOG_NAME = str(time.time())
+        self.tensorboard = TensorBoard(log_dir='log')
 
         self.batch_size = 20
         self.num_classes = 2
         self.input_channel_size = 10
         self.hidden_layer = 320
         # self.opt = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1 = 0.9, beta_2=0.999, epsilon = 1e-8)
-        self.opt = tf.keras.optimizers.Adam(learning_rate=0.01)
+        self.opt = tf.keras.optimizers.Adam(learning_rate=0.001)
 
         # TODO: Initialize all hyperparameters
         # TODO: Initialize all trainable parameters
@@ -61,7 +64,9 @@ class Model(tf.keras.Model):
         self.batch_norm1 = tf.keras.layers.BatchNormalization()
         self.batch_norm2 = tf.keras.layers.BatchNormalization()
 
-        self.dropout1 = tf.keras.layers.Dropout(0.4)
+        self.dropout1 = tf.keras.layers.Dropout(0.6)
+        self.dropout2 = tf.keras.layers.Dropout(0.6)
+        self.dropout3 = tf.keras.layers.Dropout(0.6)
         self.relu1 = tf.keras.layers.ReLU()
         self.relu2 = tf.keras.layers.ReLU()
         self.relu3 = tf.keras.layers.ReLU()
@@ -104,19 +109,35 @@ class Model(tf.keras.Model):
         # #reshape((20, -1))
         # #dense(20, 1)
 
-        inputs = tf.transpose(inputs, perm=[0,3,2,1])
+        #(batch_size,2,11,10)
+
+        lifting = tf.keras.layers.Dense(100)(inputs)
+
+        inputs = tf.transpose(lifting, perm=[0,3,2,1])
         output = self.CNN_layer1(inputs)
+        output = self.batch_norm1(output)
         output = self.relu1(output)
         output = self.pooling_layer1(output)
+        output = self.dropout1(output)
         #print("OUTPUT1 SHAPE", output.shape)
         output = self.CNN_layer2(output)
+        output = self.batch_norm2(output)
         output = self.relu2(output)
         output = self.pooling_layer2(output)
+        output = self.dropout2(output)
+
         output = self.flatten_layer(output)
         output = self.dense1(output)
-        output = self.dropout1(output)
+
+
         output = tf.reshape(output, (self.batch_size,-1))
         logits = self.dense2(output)
+        # lifting = tf.keras.layers.Dense(100)(inputs)
+        # inputs = tf.reshape(lifting, (20, -1))
+        # output = tf.keras.layers.Dense(1000, activation = 'relu')(inputs)
+        # output = tf.keras.layers.Dense(100, activation = 'relu')(output)
+        # logits = tf.keras.layers.Dense(1)(output)
+        print("logits",logits)
         return logits
 
 
@@ -130,6 +151,7 @@ class Model(tf.keras.Model):
         :param labels: during training, matrix of shape (batch_size, self.num_classes) containing the train labels
         :return: the loss of the model as a Tensor
         """
+
 
         #loss = tf.keras.losses.sparse_categorical_crossentropy(labels, logits)
         loss = tf.keras.losses.MSE(labels, logits)
@@ -151,17 +173,12 @@ class Model(tf.keras.Model):
         if (len(logits) != len(labels)):
             print("ERROR: len legits != len labels")
 
-        logits = logits.numpy()
-        logits = logits.astype(int).flatten()
-        labels = labels.astype(int)
-
-
-        for i in range(0,len(logits)):
-            if (logits[i] == labels[i]):
-                correct += 1
-
-        return correct, len(labels)
-
+        #print("labolo", labels)
+        #logits = logits.astype(int).flatten()
+        # print('logits', logits)
+        # print('labels', labels)
+        #labels = labels.numpy().astype(int)
+        return np.mean(logits == labels)
 
 def train(model, train_inputs, train_labels):
     '''
@@ -176,9 +193,11 @@ def train(model, train_inputs, train_labels):
     shape (num_labels, num_classes)
     :return: None
     '''
-    #indices = tf.random.shuffle(list(range(len(train_inputs))))
-    #train_inputs = tf.gather(train_inputs, indices)
-    #train_labels = tf.gather(train_labels, indices)
+    indices = tf.random.shuffle(list(range(len(train_inputs))))
+    train_inputs = tf.gather(train_inputs, indices)
+    train_labels_for_accuracy = tf.gather(train_labels, indices)
+    train_labels = train_labels_for_accuracy/max(train_labels)
+
     total_loss = 0
     num_batches = 0
     total_acc = 0
@@ -186,6 +205,7 @@ def train(model, train_inputs, train_labels):
     for i in range(0, len(train_inputs), model.batch_size):
         batch_inputs = train_inputs[i:i + model.batch_size]
         batch_labels = train_labels[i:i + model.batch_size]
+        batch_labels_for_accuracy = train_labels_for_accuracy[i:i + model.batch_size]
 
         if (len(batch_inputs) == 14 ):
             continue
@@ -195,11 +215,11 @@ def train(model, train_inputs, train_labels):
             logits = model.call(batch_inputs)
 
             #print("loss", logits)
-            acc, num = model.accuracy(logits, batch_labels)
-            total_acc += acc
-            total_num += num
+            R2 = model.accuracy(np.int32(max(train_labels_for_accuracy)*logits), np.int32(batch_labels_for_accuracy))
+            total_acc += R2
+            total_num += 1
             loss = model.loss(logits, batch_labels)
-            total_loss += sum(loss) / len(loss)
+            total_loss += sum(loss)/len(loss)
         num_batches += 1
         gradients = tape.gradient(loss, model.trainable_variables)
 
@@ -231,13 +251,13 @@ def test(model, test_inputs, test_labels):
         logits = model.call(batch_inputs)
         loss = model.loss(logits, batch_labels)
         total_loss += sum(loss)/len(loss)
-        correct_num, label_num = model.accuracy(logits, batch_labels)
+        R2 = model.accuracy(logits, batch_labels)
         num_batches += 1
-        correct += correct_num
-        label_size += label_num
+        correct += R2
+        label_size += 1
 
 
-    return correct/label_size, total_loss/num_batches
+    return correct/num_batches, total_loss/num_batches
 
 
 

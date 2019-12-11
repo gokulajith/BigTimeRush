@@ -146,7 +146,6 @@ def get_plays(data):
 		label = np.array(label).astype(np.long)
 		plays += [Play(np.array(nodes, dtype=np.float32), edges, label)]
 
-	print(ball_carriers)
 	return plays, np.array(ball_carriers)
 
 def get_data(file_name):
@@ -160,3 +159,52 @@ def get_data(file_name):
 	test_ball_carriers = ball_carriers[:test_length]
 	train_ball_carriers = ball_carriers[test_length:]
 	return train, test, train_ball_carriers, test_ball_carriers
+
+def get_convolution_data(file_name):
+	## return train, train_labels, test, test_labels
+	np.set_printoptions(threshold=sys.maxsize)
+	test_fraction = 0.1
+	plays, ball_carriers = get_plays(read_csv(file_name))
+
+	test_length = int(np.floor(len(plays) * test_fraction))
+	test = plays[:test_length]
+	train = plays[test_length:]
+	train, train_labels = convolution_play_converter(train)
+	test, test_labels = convolution_play_converter(test)
+
+
+	return train, train_labels, test, test_labels
+
+def convolution_play_converter(plays):
+	"""
+	This function converts play data into matrices for use in
+	the convolution model
+	:param plays:
+	:return:
+	"""
+
+	result = []
+	labels = []
+	for i in range(0,len(plays)):
+		offense = []
+		defense = []
+		play = plays[i]
+		play_features = play.nodes
+		labels.append(play.label)
+
+		for j in range(0, len(play_features)):
+			if (j < 11):
+
+				defense.append(play_features[j])
+			else:
+
+				offense.append(play_features[j])
+		defen = np.float32(defense)
+		off = np.float32(offense)
+
+		result.append((defen, off))
+
+	inputs = np.float32(result)
+	labels = np.float32(labels)
+	return inputs,labels
+
