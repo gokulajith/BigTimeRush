@@ -179,13 +179,13 @@ class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
         self.batch_size = 1
-        self.liftingLayer = nn.Linear(9, 15)
-        self.gcn1 = GCN(15, 10)
-        self.gcn2 = GCN(10, 5)
-        #self.gcn3 = GCN(10, 5)
-        self.readout = nn.Linear(110, 1)
-        self.dropout = nn.Dropout(p=0.3)
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.1)
+        self.liftingLayer = nn.Linear(9, 100)
+        self.gcn1 = GCN(100, 100)
+        self.gcn2 = GCN(100, 100)
+        self.gcn3 = GCN(100, 100)
+        self.readout = nn.Linear(2200, 1)
+        self.dropout = nn.Dropout(p=0.2)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=1)
 
     def forward(self, g):
         features = g.ndata.pop('h')
@@ -195,7 +195,7 @@ class Model(nn.Module):
         x = self.gcn1(g, x)
         #print(x.shape)
         x = self.gcn2(g, x)
-        #x = self.gcn3(g, x)
+        x = self.gcn3(g, x)
         #print(x.shape)
         x = x.reshape(self.batch_size, -1)
         #print(x.shape)
@@ -207,13 +207,18 @@ class Model(nn.Module):
         #predictions = np.argmin(logits, 1)
         #print(predictions)
 
+        num_zeroes = 0
         logits = np.int32(logits)
         print("----------")
         print("guess", logits)
 
+        if logits == 0:
+            num_zeroes += 1
+
         labels = np.int32(labels)
         print("correct", labels)
         print("----------")
+        print("num_zeroes", num_zeroes)
         return mean_absolute_error(labels, logits)
 
 class NodeApplyModule(nn.Module):
@@ -306,7 +311,7 @@ def train(model, train_data, ball_carriers):
 
         current_ball_carriers = ball_carriers[offset:offset+model.batch_size]
 
-        labels_torch = torch.FloatTensor(np.array(labels))
+        labels_torch = torch.FloatTensor(np.array(label_converter(labels)))
         batch = dgl.batch(graphs)
         labels_torch = labels_torch.reshape(model.batch_size, 1)
         x = Variable(model(batch), requires_grad=True)
@@ -324,7 +329,7 @@ def train(model, train_data, ball_carriers):
         # logits = torch.FloatTensor(np.float32(ballCarrierLogits))
         #print(x.shape)
         l = loss(x, labels_torch)
-        # print(l)
+        #print(l)
         #loss = F.nll_loss(F.log_softmax(Variable(logits, requires_grad=True), dim=1), Variable(labels_torch))
         #l = F.nll_loss(torch.FloatTensor(np.float32(ballCarrierLogits)), labels_torch)
         #print(loss)
@@ -378,7 +383,7 @@ def test(model, test_data, ball_carriers):
             graphs += [build_graph(test_data[m])]
             labels += [int(test_data[m].label)]
         current_ball_carriers = ball_carriers[offset:offset+model.batch_size]
-        labels = np.array(labels)
+        labels = np.array(label_converter(labels))
         batch = dgl.batch(graphs)
         #x = F.log_softmax(model(batch), dim=1)
         ballCarrierLogits = []
@@ -396,15 +401,6 @@ def test(model, test_data, ball_carriers):
         tot_acc += acc
     return tot_acc / num_batches
 
-
-def single_label_converter(label):
-    nlabel = 0
-    if label < -15:
-        nlabel = -15
-    if label > 15:
-        nlabel = 15
-    nlabel += 15
-    return nlabel
 
 def label_converter(labels):
     newLabels = []
@@ -430,7 +426,7 @@ def main():
         train(model, trainData, train_ball_carriers)
         print("finished training epoch", i)
         acc = test(model, testData, test_ball_carriers)
-        print("accuracy epoch", i, "is", acc)
+        print("Mean Absolute Error - epoch", i, "is", acc)
 
 
 if __name__ == '__main__':
