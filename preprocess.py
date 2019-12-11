@@ -40,6 +40,24 @@ def normalize(data):
 	defe = []
 	home = []
 	for i in range(len(data)):
+		no_orient = False
+		try:
+			orient.append(float(data[i][8]))  # orientation
+		except ValueError:
+			no_orient = True
+
+		if no_orient:
+			continue
+
+		no_direction = False
+		try:
+			direction.append(float(data[i][9]))  # direction
+		except ValueError:
+			no_direction = True
+
+		if no_direction:
+			continue
+
 		labels.append(data[i][31])
 		defe.append(data[i][36])
 		home.append(data[i][2])
@@ -48,14 +66,6 @@ def normalize(data):
 		speed.append(float(data[i][5]))  # speed (yards per second)
 		acc.append(float(data[i][6]))  # acceleration (yards per second^2)
 		disTrav.append(float(data[i][7]))  # distance traveled since snap
-		try:
-			orient.append(float(data[i][8]))  # orientation
-		except ValueError:
-			orient.append(0)
-		try:
-			direction.append(float(data[i][9]))  # direction
-		except ValueError:
-			direction.append(0)
 		weight.append(float(data[i][33]))  # weight
 
 	xposIn = mean_stand(xpos)
@@ -78,7 +88,7 @@ def normalize(data):
 	plays = []
 	play_count = 0
 	cur_play = []
-	for i in range(len(data)):
+	for i in range(len(labels)):
 		row = []
 		row += [labels[i]] #label 0
 		row += [defe[i]] #defence 1
