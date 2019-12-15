@@ -161,7 +161,7 @@ def get_data(file_name):
 	train = plays[test_length:]
 	test_ball_carriers = ball_carriers[:test_length]
 	train_ball_carriers = ball_carriers[test_length:]
-	return train, test, train_ball_carriers, test_ball_carriers
+	return train, test
 
 def get_convolution_data(file_name):
 	## return train, train_labels, test, test_labels
