@@ -69,21 +69,14 @@ def normalize(data):
 		weight.append(float(data[i][33]))  # weight
 
 	xposIn = mean_stand(xpos)
-	print("xpos", xposIn)
 	yposIn = mean_stand(ypos)
-	print("ypos", yposIn)
 	speedIn = mean_stand(speed)
-	print("speed", speedIn)
 	accIn = mean_stand(acc)
-	print("acc", accIn)
 	disTravIn = mean_stand(disTrav)
-	print("distrav", disTravIn)
 	orientIn = mean_stand(orient)
-	print("orient", orientIn)
 	directIn = mean_stand(direction)
-	print("direction", disTravIn)
 	weightIn = mean_stand(weight)
-	print("weight", weightIn)
+
 
 	plays = []
 	play_count = 0
@@ -174,7 +167,7 @@ def get_convolution_data(file_name):
 	## return train, train_labels, test, test_labels
 	np.set_printoptions(threshold=sys.maxsize)
 	test_fraction = 0.1
-	plays, ball_carriers = get_plays(read_csv(file_name))
+	plays, ball_carriers = get_plays(normalize(read_csv(file_name)))
 
 	test_length = int(np.floor(len(plays) * test_fraction))
 	test = plays[:test_length]
